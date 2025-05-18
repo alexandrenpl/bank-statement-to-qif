@@ -58,17 +58,28 @@ your_working_directory/
 
 Create an input list file (e.g., `input_files.txt`) with the following format:
 ```
+# Training files (PDF and QIF pair)
+statements/account1/dec2023.pdf
+training/account1.qif
+
+# Files to process
 statements/account1/jan2024.pdf
 statements/account1/feb2024.pdf
 statements/account1/mar2024.pdf
 output/account1_q1_2024.qif
 ```
 
-Note: The last line should be the output QIF file where all transactions will be combined.
+The file should contain:
+1. Training section with:
+   - Path to the training PDF statement
+   - Path to the corresponding QIF file
+2. Processing section with:
+   - Paths to all PDF files to process
+   - Path to the output QIF file (last line)
 
 Then run:
 ```bash
-python src/main.py --train-pdf statements/account1/dec2023.pdf --train-qif training/account1.qif --input-list input_files.txt
+python src/main.py --input-list input_files.txt
 ```
 
 ### Processing Single Files

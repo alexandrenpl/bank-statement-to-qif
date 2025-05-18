@@ -1,4 +1,9 @@
-C:\Users\alopes\Dropbox\Alexandre\Extractos\Extracto_2025_Abr.pdf
-C:\Users\alopes\Dropbox\Alexandre\Extractos\Extracto_2025_Jan.pdf
-C:\Users\alopes\Dropbox\Alexandre\Extractos\Extracto_2024_Nov.pdf
-C:\Users\alopes\Dropbox\Alexandre\Extractos\output.qif
+# Training files (PDF and QIF pair)
+statements/account1/dec2023.pdf
+training/account1.qif
+
+# Files to process
+statements/account1/jan2024.pdf
+statements/account1/feb2024.pdf
+statements/account1/mar2024.pdf
+output/account1_q1_2024.qif
