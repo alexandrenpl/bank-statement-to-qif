@@ -1,111 +1,124 @@
 import argparse
 import os
+from training_pairs import extract_all_training_pairs, find_training_pairs
 from pdf_reader import extract_transactions as extract_from_pdf
-from text_parser import extract_transactions_from_text
-from qif_parser import extract_training_data
-from trainer import TransactionCategorizer
-from predictor import categorize_transactions
 from qif_writer import write_qif
 
-def process_single_file(input_file, qif_dir, output_qif, model_path):
-    """Process a single input file and generate QIF output"""
-    # Step 1: Extract transactions from input file
-    print(f"\nProcessing {input_file}...")
-    if input_file.lower().endswith('.pdf'):
-        transactions = extract_from_pdf(input_file)
-        source_type = "PDF"
-    else:
-        transactions = extract_transactions_from_text(input_file)
-        source_type = "text file"
-    print(f"Found {len(transactions)} transactions in {source_type}")
+def train_and_process(training_pdf: str, training_qif: str, new_pdf: str, output_qif: str):
+    """
+    Treina o sistema usando um par PDF-QIF conhecido e processa um novo PDF.
     
-    # Step 2: Get training data from existing QIF files
-    print("\nGathering training data from existing QIF files...")
-    qif_files = [
-        os.path.join(qif_dir, f)
-        for f in os.listdir(qif_dir)
-        if f.lower().endswith('.qif')
-    ]
-    training_data = extract_training_data(qif_files)
-    print(f"Found {len(training_data)} training examples")
+    Args:
+        training_pdf: PDF de treinamento com transações conhecidas
+        training_qif: QIF correspondente ao PDF de treinamento
+        new_pdf: Novo PDF para processar
+        output_qif: Onde salvar o QIF gerado
+    """
+    print(f"\nFase 1: Treinamento com {training_pdf} e {training_qif}")
+    # Encontra pares de treinamento
+    training_pairs = find_training_pairs(training_pdf, training_qif)
+    print(f"Encontrados {len(training_pairs)} pares de treinamento")
     
-    # Step 3: Train or load the model
-    print("\nTraining/loading the model...")
-    categorizer = TransactionCategorizer()
-    if os.path.exists(model_path):
-        categorizer = TransactionCategorizer.load_model(model_path)
-    else:
-        categorizer.train(training_data)
-        categorizer.save_model(model_path)
-    print(f"Model saved to {model_path}")
+    print(f"\nFase 2: Processando novo arquivo {new_pdf}")
+    # Extrai transações do novo PDF
+    new_transactions = extract_from_pdf(new_pdf)
+    print(f"Encontradas {len(new_transactions)} transações no novo PDF")
     
-    # Step 4: Categorize new transactions
-    print("\nCategorizing transactions...")
-    categorized_transactions = categorize_transactions(transactions, model_path)
+    print("\nFase 3: Mapeando transações para formato QIF")
+    # Para cada nova transação, encontra o par de treinamento mais similar
+    mapped_transactions = []
+    for trans in new_transactions:
+        best_match = None
+        best_score = 0.7  # threshold mínimo para considerar um match
+        
+        for pdf_train, qif_train in training_pairs:
+            from training_pairs import match_transactions
+            score = match_transactions(trans, pdf_train)
+            if score > best_score:
+                best_score = score
+                best_match = qif_train
+        
+        if best_match:
+            # Usa os campos do QIF de treinamento, mas mantém data e valor da nova transação
+            qif_trans = best_match.copy()
+            qif_trans['date'] = trans['date']
+            qif_trans['amount'] = trans['amount']
+            mapped_transactions.append(qif_trans)
+        else:
+            # Se não encontrou match, usa a transação original sem categoria
+            mapped_transactions.append(trans)
     
-    return categorized_transactions
+    print("\nFase 4: Gerando arquivo QIF")
+    write_qif(mapped_transactions, output_qif)
+    print(f"QIF gerado em {output_qif}")
+    
+    return mapped_transactions
+
+def process_multiple_files(input_list: str, training_pdf: str, training_qif: str):
+    """
+    Processa múltiplos PDFs usando um único par de treinamento.
+    
+    Args:
+        input_list: Arquivo com lista de PDFs e QIF de saída
+        training_pdf: PDF de treinamento
+        training_qif: QIF de treinamento
+    """
+    # Lê a lista de arquivos
+    with open(input_list, 'r') as f:
+        files = [line.strip() for line in f if line.strip()]
+    
+    if len(files) < 2:
+        raise ValueError("Input list deve conter pelo menos um PDF e um QIF de saída")
+    
+    input_pdfs = files[:-1]  # Todos exceto o último são PDFs de entrada
+    output_qif = files[-1]   # Último arquivo é o QIF de saída
+    
+    # Processa cada PDF e combina os resultados
+    all_transactions = []
+    for pdf_file in input_pdfs:
+        print(f"\nProcessando {pdf_file}...")
+        transactions = train_and_process(
+            training_pdf=training_pdf,
+            training_qif=training_qif,
+            new_pdf=pdf_file,
+            output_qif=output_qif
+        )
+        all_transactions.extend(transactions)
+    
+    # Gera QIF final com todas as transações
+    print(f"\nGerando QIF final com {len(all_transactions)} transações...")
+    write_qif(all_transactions, output_qif)
+    print(f"QIF final gerado em {output_qif}")
 
 def main():
-    parser = argparse.ArgumentParser(description='Process bank statements (PDF or text) and generate categorized QIF file')
+    parser = argparse.ArgumentParser(
+        description='Converte extratos bancários PDF para QIF usando aprendizado supervisionado'
+    )
     
-    # Input methods group
+    # Argumentos para o arquivo de treinamento
+    parser.add_argument('--train-pdf', required=True,
+                      help='PDF de treinamento com transações conhecidas')
+    parser.add_argument('--train-qif', required=True,
+                      help='QIF correspondente ao PDF de treinamento')
+    
+    # Grupo mutuamente exclusivo para entrada
     input_group = parser.add_mutually_exclusive_group(required=True)
-    input_group.add_argument('--pdf', help='Path to the bank statement PDF')
-    input_group.add_argument('--text', help='Path to the text file containing copy-pasted transactions')
-    input_group.add_argument('--input-list', help='Path to a file containing list of input files and output QIF')
+    input_group.add_argument('--pdf', help='Novo PDF para processar')
+    input_group.add_argument('--input-list', 
+                          help='Arquivo com lista de PDFs e QIF de saída')
     
-    # Other arguments
-    parser.add_argument('qif_dir', help='Directory containing existing QIF files for training')
-    parser.add_argument('output_qif', help='Path where to save the output QIF file', nargs='?')
-    parser.add_argument('--model-path', default='transaction_model.joblib',
-                      help='Path where to save/load the trained model')
+    # Argumento opcional para saída (necessário apenas com --pdf)
+    parser.add_argument('--output', help='Arquivo QIF de saída (necessário com --pdf)')
     
     args = parser.parse_args()
     
+    if args.pdf and not args.output:
+        parser.error("--output é necessário quando usando --pdf")
+    
     if args.input_list:
-        # Read input files from configuration file
-        with open(args.input_list, 'r') as f:
-            files = [line.strip() for line in f if line.strip()]
-        
-        if len(files) < 2:
-            print("Error: Input list file must contain at least one input file and one output file")
-            return
-            
-        input_files = files[:-1]  # All but last file are inputs
-        output_qif = files[-1]    # Last file is output
-        
-        all_transactions = []
-        for input_file in input_files:
-            transactions = process_single_file(input_file, args.qif_dir, output_qif, args.model_path)
-            all_transactions.extend(transactions)
-        
-        # Write combined QIF file
-        print(f"\nWriting combined QIF file to {output_qif}...")
-        write_qif(all_transactions, output_qif)
-        
-        # Print summary
-        print("\nSummary of all categorized transactions:")
-        for transaction in all_transactions:
-            print(f"{transaction['date']} - {transaction['description']} "
-                  f"({transaction['amount']}) -> {transaction['category']}")
+        process_multiple_files(args.input_list, args.train_pdf, args.train_qif)
     else:
-        # Process single file
-        input_file = args.pdf if args.pdf else args.text
-        if not args.output_qif:
-            print("Error: output_qif is required when not using --input-list")
-            return
-            
-        transactions = process_single_file(input_file, args.qif_dir, args.output_qif, args.model_path)
-        
-        # Write QIF file
-        print(f"\nWriting QIF file to {args.output_qif}...")
-        write_qif(transactions, args.output_qif)
-        
-        # Print summary
-        print("\nSummary of categorized transactions:")
-        for transaction in transactions:
-            print(f"{transaction['date']} - {transaction['description']} "
-                  f"({transaction['amount']}) -> {transaction['category']}")
+        train_and_process(args.train_pdf, args.train_qif, args.pdf, args.output)
 
 if __name__ == "__main__":
     main() 

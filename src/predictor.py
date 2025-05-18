@@ -15,11 +15,8 @@ def categorize_transactions(transactions: List[Dict], model_path: str) -> List[D
     # Load the model
     categorizer = TransactionCategorizer.load_model(model_path)
     
-    # Extract descriptions
-    descriptions = [t['description'] for t in transactions]
-    
     # Predict categories
-    categories = categorizer.predict(descriptions)
+    categories = categorizer.predict(transactions)
     
     # Add categories to transactions
     categorized_transactions = []

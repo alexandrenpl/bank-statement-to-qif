@@ -3,3 +3,5 @@ pandas==2.2.1
 scikit-learn==1.4.1.post1
 qifparse==3.0.3
 python-dateutil==2.8.2
+difflib3==0.5.0
+typing-extensions==4.9.0

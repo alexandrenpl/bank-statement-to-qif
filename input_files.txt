@@ -1,4 +1,4 @@
-extratos/janeiro2024.pdf
-extratos/fevereiro2024.pdf
-extratos/marco2024.pdf
-qif_novos/primeiro_trimestre2024.qif 
+C:\Users\alopes\Dropbox\Alexandre\Extractos\Extracto_2025_Abr.pdf
+C:\Users\alopes\Dropbox\Alexandre\Extractos\Extracto_2025_Jan.pdf
+C:\Users\alopes\Dropbox\Alexandre\Extractos\Extracto_2024_Nov.pdf
+C:\Users\alopes\Dropbox\Alexandre\Extractos\output.qif
